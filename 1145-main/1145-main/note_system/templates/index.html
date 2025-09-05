@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="row">
+        <!-- 左侧标签栏 -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h4>标签</h4>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group">
+                        <li class="list-group-item {% if not selected_tag %}active{% endif %}">
+                            <a href="{{ url_for('search_notes', q=search_query or '') }}" class="{% if not selected_tag %}text-white{% endif %}">所有笔记</a>
+                        </li>
+                        {% for tag in tags %}
+                            <li class="list-group-item {% if selected_tag == tag.name %}active{% endif %}">
+                                <a href="{{ url_for('search_notes', q=search_query or '', tag=tag.name) }}" class="{% if selected_tag == tag.name %}text-white{% endif %}">{{ tag.name }} ({{ tag.notes|length }})</a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 复习提醒卡片 -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h4>待复习笔记</h4>
+                </div>
+                <div class="card-body">
+                    {% set now = datetime.utcnow() %}
+                    {% set due_notes = notes|selectattr('next_review', 'defined')|selectattr('next_review', '<=', now)|list %}
+                    {% if due_notes %}
+                        <ul class="list-group">
+                            {% for note in due_notes[:5] %} <!-- 只显示前5条 -->
+                                <li class="list-group-item">
+                                    <a href="#note-{{ note.id }}">{{ note.title }}</a>
+                                    <span class="badge bg-warning text-dark float-end">需复习</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                        {% if due_notes|length > 5 %}
+                            <p class="mt-2 text-muted text-sm">还有 {{ due_notes|length - 5 }} 条待复习笔记...</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-muted">暂无待复习笔记</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧笔记列表 -->
+        <div class="col-md-9">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3>笔记列表</h3>
+                    <div class="float-end">
+                        <a href="{{ url_for('create_note') }}" class="btn btn-primary">新建笔记</a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if notes %}
+                        <div class="list-group">
+                            {% for note in notes %}
+                                <div class="list-group-item mb-3" id="note-{{ note.id }}">
+                                    <div class="d-flex justify-content-between">
+                                        <h5 class="mb-1">{{ note.title }}</h5>
+                                        <div>
+                                            <a href="{{ url_for('edit_note', note_id=note.id) }}" class="btn btn-sm btn-outline-secondary me-2">编辑</a>
+                                            <a href="{{ url_for('delete_note', note_id=note.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定要删除这条笔记吗？')">删除</a>
+                                        </div>
+                                    </div>
+                                    
+                                    <p class="mb-2 text-muted">创建于: {{ note.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                                    <p class="mb-3">{{ note.content[:200] }}{% if note.content|length > 200 %}...{% endif %}</p>
+                                    
+                                    <!-- 标签显示 -->
+                                    {% if note.tags %}
+                                        <div class="mb-3">
+                                            {% for tag in note.tags %}
+                                                <span class="badge bg-primary text-white me-1">{{ tag.name }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    
+                                    <!-- 复习设置 -->
+                                    <div class="mt-3">
+                                        {% if note.next_review %}
+                                            <p class="text-sm text-muted">下次复习: {{ note.next_review.strftime('%Y-%m-%d') }}</p>
+                                            {% if note.next_review <= datetime.utcnow() %}
+                                                <a href="{{ url_for('mark_reviewed', note_id=note.id) }}" class="btn btn-sm btn-warning">标记为已复习</a>
+                                            {% endif %}
+                                        {% else %}
+                                            <form action="{{ url_for('set_review', note_id=note.id) }}" method="post" class="d-inline">
+                                                <select name="days" class="form-select form-select-sm d-inline w-auto me-2">
+                                                    <option value="1">1天后</option>
+                                                    <option value="3">3天后</option>
+                                                    <option value="7">7天后</option>
+                                                    <option value="14">14天后</option>
+                                                    <option value="30">30天后</option>
+                                                </select>
+                                                <button type="submit" class="btn btn-sm btn-success">设置复习</button>
+                                            </form>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <h4>暂无笔记</h4>
+                            <p class="text-muted">点击上方"新建笔记"按钮开始创建你的第一条笔记吧！</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        // 添加当前日期时间到模板上下文
+        document.addEventListener('DOMContentLoaded', function() {
+            // 复习设置表单提交处理
+            document.querySelectorAll('form[action^="/set_review/"]').forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const formData = new FormData(this);
+                    const noteId = this.action.split('/').pop();
+                    
+                    fetch(this.action, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // 简单更新UI
+                            const reviewSection = this.parentElement;
+                            reviewSection.innerHTML = 
+                                `<p class="text-sm text-muted">下次复习: ${data.next_review}</p>
+                                 <button class="btn btn-sm btn-info" disabled>已设置</button>`;
+                            
+                            // 显示成功消息
+                            alert('复习提醒设置成功！');
+                        }
+                    });
+                });
+            });
+        });
+    </script>
+{% endblock %}

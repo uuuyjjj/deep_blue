@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3>编辑笔记</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('edit_note', note_id=note.id) }}">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">笔记标题</label>
+                            <input type="text" class="form-control" id="title" name="title" value="{{ note.title }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="content" class="form-label">笔记内容</label>
+                            <div class="mb-2 text-sm text-muted">
+                                提示：在内容中使用 <strong>#标签名</strong> 的格式可以自动创建标签
+                            </div>
+                            <textarea class="form-control" id="content" name="content" rows="10" required>{{ note.content }}</textarea>
+                        </div>
+                        
+                        <!-- 当前标签显示 -->
+                        {% if note.tags %}
+                            <div class="mb-3">
+                                <label class="form-label">当前标签：</label>
+                                {% for tag in note.tags %}
+                                    <span class="badge bg-primary text-white me-1">{{ tag.name }}</span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        
+                        <div class="text-end">
+                            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary me-2">取消</a>
+                            <button type="submit" class="btn btn-primary">更新笔记</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 简单的自动保存功能
+            const contentTextarea = document.getElementById('content');
+            const titleInput = document.getElementById('title');
+            
+            // 定期保存草稿
+            function saveDraft() {
+                if (titleInput.value || contentTextarea.value) {
+                    localStorage.setItem('editDraftTitle', titleInput.value);
+                    localStorage.setItem('editDraftContent', contentTextarea.value);
+                }
+            }
+            
+            // 输入时保存草稿
+            titleInput.addEventListener('input', saveDraft);
+            contentTextarea.addEventListener('input', saveDraft);
+            
+            // 表单提交时清除草稿
+            document.querySelector('form').addEventListener('submit', function() {
+                localStorage.removeItem('editDraftTitle');
+                localStorage.removeItem('editDraftContent');
+            });
+        });
+    </script>
+{% endblock %}
